@@ -6,84 +6,130 @@ const api = {
       ...options,
       credentials: 'include',
       headers: {
-        'Content-Type': 'application/json',
+        // Only set Content-Type if NOT FormData
+        ...(options.isFormData ? {} : { 'Content-Type': 'application/json' }),
         ...options.headers,
       },
     };
 
-    const response = await fetch(`${API_BASE}${endpoint}`, config);
-    if (!response.ok) {
-      const error = await response.json().catch(() => ({}));
-      throw new Error(error.detail || 'Request failed');
+    // Set body correctly
+    if (options.body && !options.isFormData && typeof options.body !== 'string') {
+      config.body = JSON.stringify(options.body);
+    } else if (options.body && options.isFormData) {
+      config.body = options.body; // FormData
     }
+
+    const response = await fetch(`${API_BASE}${endpoint}`, config);
+
+    if (!response.ok) {
+      let errorData = {};
+      try {
+        errorData = await response.json();
+      } catch {
+        // Ignore if response is not JSON
+      }
+      const message = errorData.detail || errorData.message || `HTTP ${response.status}`;
+      const error = new Error(message);
+      error.status = response.status;
+      error.data = errorData;
+      throw error;
+    }
+
+    // Handle empty response (e.g. DELETE)
+    const contentType = response.headers.get('content-type');
+    if (!contentType || !contentType.includes('application/json')) {
+      return null;
+    }
+
     return response.json();
   },
 
-  // Auth
-  login: (email, password) => api.request('/users/users/login/', {
-    method: 'POST',
-    body: JSON.stringify({ email, password }),
-  }),
-  
+  // ==================== AUTH ====================
+  login: (email, password) =>
+    api.request('/users/users/login/', {
+      method: 'POST',
+      body: { email, password },
+    }),
+
   logout: () => api.request('/users/users/logout/', { method: 'POST' }),
-  
-  register: (email, name, password) => api.request('/users/users/', {
-    method: 'POST',
-    body: JSON.stringify({ email, name, password }),
-  }),
-  
+
+  register: (email, name, password) =>
+    api.request('/users/users/', {
+      method: 'POST',
+      body: { email, name, password },
+    }),
+
   getCurrentUser: () => api.request('/users/users/me/'),
 
-  // Items
-  getItems: () => api.request('/items/items/'),
-  getItem: (id) => api.request(`/items/items/${id}/`),
-  createItem: (data) => api.request('/items/items/', {
-    method: 'POST',
-    body: JSON.stringify(data),
-  }),
-  updateItem: (id, data) => api.request(`/items/items/${id}/`, {
-    method: 'PUT',
-    body: JSON.stringify(data),
-  }),
-  deleteItem: (id) => api.request(`/items/items/${id}/`, { method: 'DELETE' }),
+  // ==================== ITEMS ====================
+  getItems: (params = {}) => {
+    const query = new URLSearchParams(
+      Object.entries(params).filter(([_, v]) => v !== '' && v !== null)
+    ).toString();
+    return api.request(`/items/items/${query ? `?${query}` : ''}`);
+  },
 
-  // Transactions
+  getItem: (id) => api.request(`/items/items/${id}/`),
+
+  createItem: (data, isFormData = false) =>
+    api.request('/items/items/', {
+      method: 'POST',
+      body: data,
+      isFormData,
+    }),
+
+  updateItem: (id, data, isFormData = false) =>
+    api.request(`/items/items/${id}/`, {
+      method: 'PUT',
+      body: data,
+      isFormData,
+    }),
+
+  deleteItem: (id) =>
+    api.request(`/items/items/${id}/`, { method: 'DELETE' }),
+
+  // ==================== TRANSACTIONS ====================
   getSales: () => api.request('/transaction/sales/'),
-  createSale: (data) => api.request('/transaction/sales/', {
-    method: 'POST',
-    body: JSON.stringify(data),
-  }),
-  
+  createSale: (data) =>
+    api.request('/transaction/sales/', {
+      method: 'POST',
+      body: data,
+    }),
+
   getPurchases: () => api.request('/transaction/purchases/'),
-  createPurchase: (data) => api.request('/transaction/purchases/', {
-    method: 'POST',
-    body: JSON.stringify(data),
-  }),
+  createPurchase: (data) =>
+    api.request('/transaction/purchases/', {
+      method: 'POST',
+      body: data,
+    }),
 
   getIncomes: () => api.request('/transaction/incomes/'),
-  createIncome: (data) => api.request('/transaction/incomes/', {
-    method: 'POST',
-    body: JSON.stringify(data),
-  }),
+  createIncome: (data) =>
+    api.request('/transaction/incomes/', {
+      method: 'POST',
+      body: data,
+    }),
 
   getExpenses: () => api.request('/transaction/expenses/'),
-  createExpense: (data) => api.request('/transaction/expenses/', {
-    method: 'POST',
-    body: JSON.stringify(data),
-  }),
+  createExpense: (data) =>
+    api.request('/transaction/expenses/', {
+      method: 'POST',
+      body: data,
+    }),
 
-  // Creditors & Vendors
   getCreditors: () => api.request('/transaction/creditors/'),
-  createCreditor: (data) => api.request('/transaction/creditors/', {
-    method: 'POST',
-    body: JSON.stringify(data),
-  }),
+  createCreditor: (data) =>
+    api.request('/transaction/creditors/', {
+      method: 'POST',
+      body: data,
+    }),
 
   getVendors: () => api.request('/transaction/vendors/'),
-  createVendor: (data) => api.request('/transaction/vendors/', {
-    method: 'POST',
-    body: JSON.stringify(data),
-  }),
+  createVendor: (data) =>
+    api.request('/transaction/vendors/', {
+      method: 'POST',
+      body: data,
+    }),
 
   getCashAccount: () => api.request('/transaction/cash/'),
 };

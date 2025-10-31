@@ -1,13 +1,10 @@
+// components/SalesTab.jsx
 import React, { useState, useEffect } from 'react';
 import api from '../services/api';
 
-export default function SalesTab() {
+export default function SalesTab({ key }) {
   const [sales, setSales] = useState([]);
   const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    loadSales();
-  }, []);
 
   const loadSales = async () => {
     try {
@@ -19,6 +16,10 @@ export default function SalesTab() {
       setLoading(false);
     }
   };
+
+  useEffect(() => {
+    loadSales();
+  }, [key]);
 
   if (loading) return <div>Loading...</div>;
 
