@@ -8,11 +8,10 @@ export default function CreditorsVendorsPage() {
   const [activeTab, setActiveTab] = useState("creditors");
   const [showAddCreditor, setShowAddCreditor] = useState(false);
   const [showAddVendor, setShowAddVendor] = useState(false);
-  const [saving, setSaving] = useState(false);
 
   // simple refresh trigger to notify tabs to reload their data
   const [refreshKey, setRefreshKey] = useState(0);
-  const triggerRefresh = () => setRefreshKey((k) => k + 1);
+  const triggerRefresh = () => setRefreshKey((k) => k + 1); //what it does?
 
   return (
     <div>
@@ -44,7 +43,7 @@ export default function CreditorsVendorsPage() {
 
         {/* right aligned add button */}
         <div className="ml-auto mb-2">
-          {activeTab === "vendors" && (
+          {activeTab === "vendors" && ( //why &&? and not used if/else instead:
             <div>
               <button
                 onClick={() => setShowAddVendor(true)}
