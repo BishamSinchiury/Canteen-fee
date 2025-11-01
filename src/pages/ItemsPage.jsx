@@ -1,33 +1,39 @@
-import React, { useState, useEffect } from 'react';
-import { Plus, Search } from 'lucide-react';
-import api from '../services/api';
-import ItemCard from '../components/ItemCard';
-import ItemModal from '../components/ItemModal';
+import React, { useState, useEffect } from "react";
+import { Plus, Search } from "lucide-react";
+import api from "../services/api";
+import ItemCard from "../components/ItemCard";
+import ItemModal from "../components/ItemModal";
 
 export default function ItemsPage() {
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
   const [editingItem, setEditingItem] = useState(null);
-  const [searchTerm, setSearchTerm] = useState('');
+  const [searchTerm, setSearchTerm] = useState("");
+  // Default Items page to nonfood since this page is primarily for NonFood items
+  const [modalMode, setModalMode] = useState("nonfood");
   const [filters, setFilters] = useState({
-    min_price: '',
-    max_price: '',
-    unit_name: '',
-    veg: '',
-    is_available: '',
+    min_price: "",
+    max_price: "",
+    unit_name: "",
+    veg: "",
+    is_available: "",
   });
 
-  const loadItems = async (search = '') => {
+  const loadItems = async (search = "") => {
     try {
       setLoading(true);
       const params = { ...filters };
       if (search) params.search = search;
 
       const data = await api.getItems(params);
-      setItems(data);
+      // Only show non-food items here (items that have a `quantity` field)
+      const nonFoodOnly = Array.isArray(data)
+        ? data.filter((i) => i.quantity !== undefined && i.quantity !== null)
+        : [];
+      setItems(nonFoodOnly);
     } catch (error) {
-      console.error('Failed to load items:', error);
+      console.error("Failed to load items:", error);
     } finally {
       setLoading(false);
     }
@@ -49,17 +55,51 @@ export default function ItemsPage() {
 
   const clearFilters = () => {
     setFilters({
-      min_price: '',
-      max_price: '',
-      unit_name: '',
-      veg: '',
-      is_available: '',
+      min_price: "",
+      max_price: "",
+      unit_name: "",
+      veg: "",
+      is_available: "",
     });
   };
 
   const openEditModal = (item) => {
-    setEditingItem(item);
-    setShowModal(true);
+    // fetch full details to get created_at / updated_at and quantity
+    const doOpen = async () => {
+      try {
+        let full = item;
+        if (item?.quantity !== undefined) {
+          full = await api.getNonFood(item.id);
+        } else {
+          full = await api.getItem(item.id);
+        }
+        // Ensure modal mode matches the item's type when editing
+        setModalMode(full?.quantity !== undefined ? "nonfood" : "food");
+        setEditingItem(full);
+      } catch (err) {
+        console.warn("Failed to fetch full item, using provided item", err);
+        setModalMode(item?.quantity !== undefined ? "nonfood" : "food");
+        setEditingItem(item);
+      }
+      setShowModal(true);
+    };
+    doOpen();
+  };
+
+  const handleDelete = async (item) => {
+    try {
+      if (item?.quantity !== undefined) {
+        await api.deleteNonFood(item.id);
+      } else {
+        await api.deleteItem(item.id);
+      }
+      setItems((prev) => prev.filter((i) => i.id !== item.id));
+    } catch (err) {
+      console.error("Delete failed", err);
+      alert(
+        "Failed to delete item: " + (err?.data?.detail || err?.message || err)
+      );
+    }
   };
 
   const closeModal = () => {
@@ -68,22 +108,34 @@ export default function ItemsPage() {
   };
 
   return (
-    <div className="p-6">
+    <div className="p-4 sm:p-6">
       {/* Header */}
-      <div className="flex justify-between items-center mb-8">
+      <div className="flex flex-col md:flex-row justify-between items-center mb-8 gap-3">
         <h1 className="text-3xl font-bold text-gray-900">Items</h1>
-        <button
-          onClick={() => setShowModal(true)}
-          className="flex items-center gap-2 bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition"
-        >
-          <Plus className="w-5 h-5" />
-          Add Item
-        </button>
+        <div className="flex items-center gap-3">
+          <select
+            value={modalMode}
+            onChange={(e) => setModalMode(e.target.value)}
+            className="px-3 py-2 border rounded-lg text-sm"
+            title="Select item type for Add Item modal"
+          >
+            <option value="food">Food</option>
+            <option value="nonfood">NonFood</option>
+          </select>
+
+          <button
+            onClick={() => setShowModal(true)}
+            className="flex items-center gap-2 bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition"
+          >
+            <Plus className="w-5 h-5" />
+            Add Item
+          </button>
+        </div>
       </div>
 
       {/* Search + Filters */}
       <div className="flex flex-col md:flex-row gap-4 mb-6">
-        <div className="relative flex-1 max-w-md">
+        <div className="relative flex-1 min-w-0 max-w-full sm:max-w-md">
           <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
           <input
             type="text"
@@ -99,26 +151,26 @@ export default function ItemsPage() {
             type="number"
             placeholder="Min Price"
             value={filters.min_price}
-            onChange={(e) => handleFilterChange('min_price', e.target.value)}
+            onChange={(e) => handleFilterChange("min_price", e.target.value)}
             className="w-28 px-3 py-2 border rounded-lg text-sm"
           />
           <input
             type="number"
             placeholder="Max Price"
             value={filters.max_price}
-            onChange={(e) => handleFilterChange('max_price', e.target.value)}
+            onChange={(e) => handleFilterChange("max_price", e.target.value)}
             className="w-28 px-3 py-2 border rounded-lg text-sm"
           />
           <input
             type="text"
             placeholder="Unit name"
             value={filters.unit_name}
-            onChange={(e) => handleFilterChange('unit_name', e.target.value)}
+            onChange={(e) => handleFilterChange("unit_name", e.target.value)}
             className="w-36 px-3 py-2 border rounded-lg text-sm"
           />
           <select
             value={filters.veg}
-            onChange={(e) => handleFilterChange('veg', e.target.value)}
+            onChange={(e) => handleFilterChange("veg", e.target.value)}
             className="px-3 py-2 border rounded-lg text-sm"
           >
             <option value="">Veg/Non-Veg</option>
@@ -127,7 +179,7 @@ export default function ItemsPage() {
           </select>
           <select
             value={filters.is_available}
-            onChange={(e) => handleFilterChange('is_available', e.target.value)}
+            onChange={(e) => handleFilterChange("is_available", e.target.value)}
             className="px-3 py-2 border rounded-lg text-sm"
           >
             <option value="">Availability</option>
@@ -154,6 +206,7 @@ export default function ItemsPage() {
                 key={item.id}
                 item={item}
                 onUpdate={openEditModal}
+                onDelete={handleDelete}
               />
             ))
           ) : (
@@ -167,6 +220,7 @@ export default function ItemsPage() {
       {/* Modal */}
       {showModal && (
         <ItemModal
+          mode={modalMode}
           onClose={closeModal}
           onSave={() => {
             loadItems(searchTerm);

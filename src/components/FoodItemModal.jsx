@@ -2,12 +2,7 @@ import React, { useState } from "react";
 import { X, Trash2 } from "lucide-react";
 import api from "../services/api";
 
-export default function ItemModal({
-  onClose,
-  onSave,
-  item = null,
-  mode = "food",
-}) {
+export default function FoodItemModal({ onClose, onSave, item = null }) {
   const [formData, setFormData] = useState({
     name: item?.name || "",
     description: item?.description || "",
@@ -19,13 +14,6 @@ export default function ItemModal({
         ? item.units.map((u) => ({ unit_name: u.unit_name, price: u.price }))
         : [{ unit_name: "", price: "" }],
     image: null,
-    // NonFood fields - only default quantity for nonfood mode; leave undefined for food
-    quantity:
-      item?.quantity !== undefined
-        ? item.quantity
-        : mode === "nonfood"
-        ? 0
-        : undefined,
   });
 
   const handleSubmit = async (e) => {
@@ -43,78 +31,46 @@ export default function ItemModal({
       let isMultipart = false;
 
       if (formData.image instanceof File) {
-        // Use FormData for image upload
         isMultipart = true;
         payload = new FormData();
         payload.append("name", formData.name);
         payload.append("description", formData.description);
+        payload.append("veg", formData.veg ? "true" : "false");
         payload.append(
           "is_available",
           formData.is_available ? "true" : "false"
         );
-        payload.append("quantity", String(formData.quantity ?? 0));
+        payload.append("ingredients", formData.ingredients);
+        payload.append("image", formData.image);
 
-        if (formData.image) payload.append("image", formData.image);
-
-        // Append units in indexed format: units[0][unit_name], units[0][price], etc.
         cleanUnits.forEach((unit, index) => {
           payload.append(`units[${index}][unit_name]`, unit.unit_name);
-          payload.append(`units[${index}][price]`, String(unit.price));
+          payload.append(`units[${index}][price]`, unit.price);
         });
       } else {
-        // Pure JSON payload (no image)
         payload = {
           name: formData.name,
           description: formData.description,
+          veg: formData.veg,
           is_available: formData.is_available,
-          quantity: Number(formData.quantity ?? 0),
+          ingredients: formData.ingredients,
           units: cleanUnits,
         };
       }
 
-      // Debug: log payload to help diagnose 404s
-      // eslint-disable-next-line no-console
-      console.debug("ItemModal submit -> payload:", { payload, isMultipart });
-
-      // Choose endpoint based on explicit mode (safer than implicit quantity presence)
-      if (mode === "nonfood") {
-        if (item) {
-          await api.updateNonFood(item.id, payload, isMultipart);
-        } else {
-          const created = await api.createNonFood(payload, isMultipart);
-          // record created nonfood id locally so other pages (food page) can avoid showing it
-          try {
-            const key = "client:nonfood-created-ids";
-            const raw = localStorage.getItem(key);
-            const ids = raw ? JSON.parse(raw) : [];
-            if (created?.id && !ids.includes(created.id)) {
-              ids.push(created.id);
-              localStorage.setItem(key, JSON.stringify(ids));
-            }
-          } catch (e) {
-            /* ignore localStorage errors */
-          }
-        }
+      if (item) {
+        await api.updateItem(item.id, payload, isMultipart);
       } else {
-        if (item) {
-          await api.updateItem(item.id, payload, isMultipart);
-        } else {
-          await api.createItem(payload, isMultipart);
-        }
+        await api.createItem(payload, isMultipart);
       }
 
       onSave();
       onClose();
     } catch (error) {
-      // api.request throws an Error with .status and .data
-      // eslint-disable-next-line no-console
       console.error("Save failed:", error);
       const message =
-        error?.data?.detail || error?.data || error?.message || String(error);
-      alert(
-        "Failed to save item: " +
-          (typeof message === "object" ? JSON.stringify(message) : message)
-      );
+        error.response?.data?.detail || error.response?.data || error.message;
+      alert("Failed to save item: " + message);
     }
   };
 
@@ -139,7 +95,7 @@ export default function ItemModal({
   };
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-40">
       <div className="bg-white rounded-lg w-full max-h-[85vh] overflow-y-auto max-w-full sm:max-w-lg md:max-w-2xl lg:max-w-3xl">
         <div className="p-4 sm:p-6">
           <div className="flex justify-between items-center mb-6">
@@ -148,16 +104,14 @@ export default function ItemModal({
             </h2>
             <button
               onClick={onClose}
-              className="text-gray-400 hover:text-red-600 transition-colors"
+              className="text-gray-400 hover:text-gray-600"
             >
               <X className="w-6 h-6" />
             </button>
           </div>
 
           <form onSubmit={handleSubmit} className="space-y-4">
-            {/* Image + Name (responsive) */}
             <div className="grid gap-4 grid-cols-1 md:grid-cols-2">
-              {/* Image */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
                   Image
@@ -179,7 +133,6 @@ export default function ItemModal({
                 )}
               </div>
 
-              {/* Name */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
                   Name
@@ -196,7 +149,6 @@ export default function ItemModal({
               </div>
             </div>
 
-            {/* Description */}
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
                 Description
@@ -211,25 +163,6 @@ export default function ItemModal({
               />
             </div>
 
-            {/* Quantity (NonFood) - only show when mode === 'nonfood' or editing an item that has quantity */}
-            {(mode === "nonfood" || item?.quantity !== undefined) && (
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Quantity
-                </label>
-                <input
-                  type="number"
-                  min="0"
-                  value={formData.quantity ?? ""}
-                  onChange={(e) =>
-                    setFormData({ ...formData, quantity: e.target.value })
-                  }
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
-                />
-              </div>
-            )}
-
-            {/* Checkboxes */}
             <div className="grid grid-cols-2 gap-4">
               <label className="flex items-center">
                 <input
@@ -255,7 +188,6 @@ export default function ItemModal({
               </label>
             </div>
 
-            {/* Ingredients */}
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
                 Ingredients
@@ -271,7 +203,6 @@ export default function ItemModal({
               />
             </div>
 
-            {/* Units & Prices */}
             <div>
               <div className="flex justify-between items-center mb-2">
                 <label className="block text-sm font-medium text-gray-700">
@@ -320,18 +251,6 @@ export default function ItemModal({
               ))}
             </div>
 
-            {/* Submit Buttons */}
-            {/* Created/Updated timestamps (read-only) */}
-            {item?.created_at && (
-              <div className="text-sm text-gray-500">
-                Created: {new Date(item.created_at).toLocaleString()}
-              </div>
-            )}
-            {item?.updated_at && (
-              <div className="text-sm text-gray-500">
-                Updated: {new Date(item.updated_at).toLocaleString()}
-              </div>
-            )}
             <div className="flex gap-3 pt-4">
               <button
                 type="submit"

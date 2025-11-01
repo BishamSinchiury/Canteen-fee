@@ -1,6 +1,6 @@
-import React, { useState } from "react";
+import { useState } from "react";
 
-export default function ItemCard({ item, onUpdate, onDelete }) {
+export default function FoodItemCard({ item, onUpdate, onDelete }) {
   const [imageFailed, setImageFailed] = useState(false);
   const [confirmOpen, setConfirmOpen] = useState(false);
 
@@ -16,11 +16,12 @@ export default function ItemCard({ item, onUpdate, onDelete }) {
           className="w-full h-40 sm:h-44 md:h-48 object-cover"
           onError={() => {
             if (!imageFailed) {
-              setImageFailed(true); // Mark as failed once
+              setImageFailed(true);
             }
           }}
           loading="lazy"
         />
+
         {onDelete && (
           <div className="absolute top-2 right-2">
             <div className="relative">
@@ -29,7 +30,7 @@ export default function ItemCard({ item, onUpdate, onDelete }) {
                   e.stopPropagation();
                   setConfirmOpen((s) => !s);
                 }}
-                aria-label="Delete item"
+                title="Delete"
                 className="w-8 h-8 bg-white/90 text-gray-700 rounded-full flex items-center justify-center shadow hover:bg-red-600 hover:text-white transition-colors z-20"
               >
                 ×
@@ -74,15 +75,6 @@ export default function ItemCard({ item, onUpdate, onDelete }) {
             >
               {item.veg ? "Veg" : "Non-Veg"}
             </span>
-            {onDelete && (
-              <button
-                onClick={() => onDelete(item)}
-                title="Delete"
-                className="text-gray-400 hover:text-red-600"
-              >
-                ×
-              </button>
-            )}
           </div>
         </div>
 

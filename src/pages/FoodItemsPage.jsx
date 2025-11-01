@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from "react";
 import { Plus, Search } from "lucide-react";
 import api from "../services/api";
-import ItemCard from "../components/ItemCard";
-import ItemModal from "../components/ItemModal";
+import FoodItemCard from "../components/FoodItemCard";
+import FoodItemModal from "../components/FoodItemModal";
 
 export default function FoodItemsPage() {
   const [items, setItems] = useState([]);
@@ -25,7 +25,24 @@ export default function FoodItemsPage() {
       if (search) params.search = search;
 
       const data = await api.getItems(params);
-      setItems(data);
+      // Only show food items here (items without a `quantity` field)
+      const storedRaw = (() => {
+        try {
+          return localStorage.getItem("client:nonfood-created-ids");
+        } catch {
+          return null;
+        }
+      })();
+      const blockedIds = storedRaw ? JSON.parse(storedRaw) : [];
+
+      const foodOnly = Array.isArray(data)
+        ? data.filter(
+            (i) =>
+              (i.quantity === undefined || i.quantity === null) &&
+              !blockedIds.includes(i.id)
+          )
+        : [];
+      setItems(foodOnly);
     } catch (error) {
       console.error("Failed to load items:", error);
     } finally {
@@ -62,28 +79,43 @@ export default function FoodItemsPage() {
     setShowModal(true);
   };
 
+  const handleDelete = async (item) => {
+    try {
+      // Food items use the generic items endpoint
+      await api.deleteItem(item.id);
+      setItems((prev) => prev.filter((i) => i.id !== item.id));
+    } catch (err) {
+      console.error("Delete failed", err);
+      alert(
+        "Failed to delete item: " + (err?.data?.detail || err?.message || err)
+      );
+    }
+  };
+
   const closeModal = () => {
     setShowModal(false);
     setEditingItem(null);
   };
 
   return (
-    <div className="p-6">
+    <div className="p-4 sm:p-6">
       {/* Header */}
-      <div className="flex justify-between items-center mb-8">
+      <div className="flex flex-col md:flex-row justify-between items-center mb-8 gap-3">
         <h1 className="text-3xl font-bold text-gray-900">Items</h1>
-        <button
-          onClick={() => setShowModal(true)}
-          className="flex items-center gap-2 bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition"
-        >
-          <Plus className="w-5 h-5" />
-          Add Item
-        </button>
+        <div className="flex items-center gap-3">
+          <button
+            onClick={() => setShowModal(true)}
+            className="flex items-center gap-2 bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition"
+          >
+            <Plus className="w-5 h-5" />
+            Add Item
+          </button>
+        </div>
       </div>
 
       {/* Search + Filters */}
       <div className="flex flex-col md:flex-row gap-4 mb-6">
-        <div className="relative flex-1 max-w-md">
+        <div className="relative flex-1 min-w-0 max-w-full sm:max-w-md">
           <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
           <input
             type="text"
@@ -150,7 +182,12 @@ export default function FoodItemsPage() {
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
           {items.length > 0 ? (
             items.map((item) => (
-              <ItemCard key={item.id} item={item} onUpdate={openEditModal} />
+              <FoodItemCard
+                key={item.id}
+                item={item}
+                onUpdate={openEditModal}
+                onDelete={handleDelete}
+              />
             ))
           ) : (
             <div className="col-span-full text-center text-gray-500 py-10">
@@ -162,7 +199,7 @@ export default function FoodItemsPage() {
 
       {/* Modal */}
       {showModal && (
-        <ItemModal
+        <FoodItemModal
           onClose={closeModal}
           onSave={() => {
             loadItems(searchTerm);
